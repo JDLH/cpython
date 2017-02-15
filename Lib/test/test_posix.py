@@ -818,10 +818,27 @@ class PosixTester(unittest.TestCase):
 
         # 'id -G' and 'os.getgroups()' should return the same
         # groups, ignoring order, duplicates, and the effective gid.
+        symdiff = idg_groups.symmetric_difference(posix.getgroups())
         # #10822/#26944 - It is implementation defined whether
         # posix.getgroups() includes the effective gid.
-        symdiff = idg_groups.symmetric_difference(posix.getgroups())
-        self.assertTrue(not symdiff or symdiff == {posix.getegid()})
+        # So, remove the effective gid if present
+        symdiff.discard(posix.getegid())
+
+        msg = None
+        if len(symdiff):
+            # Failing. Prepare a readable diagnostics with group names.
+            import grp
+            msg = "id -G and posix.groups() should have zero difference.\n" \
+                "Groups in id -G but not posix.groups(): {0}\n" \
+                "Groups in posix.groups() but not id -G: {1}\n"  \
+                "(Effective GID ({2}) was disregarded.)".format(
+                    [(i, grp.getgrgid(i)[0]) for i in 
+                        idg_groups - set(posix.getgroups())],
+                    [(i, grp.getgrgid(i)[0]) for i in 
+                        set(posix.getgroups()) - idg_groups],
+                    posix.getegid()
+                )
+        self.assertEqual(len(symdiff), 0, msg)
 
     # tests for the posix *at functions follow
 
